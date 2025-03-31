@@ -1,0 +1,128 @@
+//@version=6
+indicator("Croak Indicator Trend Filtered", overlay=true, max_lines_count=500, max_bars_back=500)
+
+// ─────────────────────────────
+// This indicator is provided for educational and informational purposes only.
+// It does not constitute financial advice.
+// The script is experimental and should not be used as the sole basis for trading decisions.
+// Always test strategies thoroughly and trade responsibly.
+// ─────────────────────────────
+
+// This script visualizes market structure by identifying significant swing highs and lows.
+// It places a frog emoji 🐸 at potential bottoms and a fox emoji 🦊 at potential tops,
+// but only when in an appropriate trend (filtered by EMA cross).
+// Signals alternate: a frog must appear before a fox, and vice versa.
+
+// === Settings
+length = input.int(30, title="Pattern Length")
+from_start = input.bool(true, title="Use First Bar As Start Point")
+
+// === Trend Filter (EMA Crossover)
+emaFast = ta.ema(close, 21)
+emaSlow = ta.ema(close, 50)
+bullTrend = emaFast > emaSlow
+bearTrend = emaFast < emaSlow
+
+// === Market Structure Detection
+os = 0
+n = bar_index
+var float valtop = na
+var float valbtm = na
+
+// Table to show score (optional)
+var table tb = table.new(position.top_right, 1, 2)
+
+var Y = array.new_float(0)
+var X = array.new_int(0)
+
+float a = math.max(close, open)
+float b = math.min(close, open)
+
+float upper = ta.highest(a, length)
+float lower = ta.lowest(b, length)
+
+os := a[length] > upper ? 0 : b[length] < lower ? 1 : os[1]
+
+btm = os == 1 and os[1] != 1
+top = os == 0 and os[1] != 0
+
+if top
+    array.unshift(Y, a[length])
+    array.unshift(X, n - length)
+if btm
+    array.unshift(Y, b[length])
+    array.unshift(X, n - length)
+
+// === Signal Alternation Logic
+var bool lastWasFrog = true      // Start with frog as the default last signal
+var bool hasTriggered = false    // Used to allow the first frog or fox
+
+// Conditions for valid signals (must alternate after first signal)
+validFrog = btm and bullTrend and (not hasTriggered or not lastWasFrog)
+validFox  = top and bearTrend and (not hasTriggered or lastWasFrog)
+
+// Plot only if alternating
+plotchar(validFrog ? low[length] : na, title="Frog", char="🐸", location=location.belowbar, offset=-length, size=size.tiny)
+plotchar(validFox ? high[length] : na, title="Fox", char="🦊", location=location.abovebar, offset=-length, size=size.tiny)
+
+// Update the state
+if validFrog
+    lastWasFrog := true
+    hasTriggered := true
+else if validFox
+    lastWasFrog := false
+    hasTriggered := true
+
+
+// === Optional Score Display
+if barstate.islast
+    float score = na
+    if array.size(Y) >= 5
+        float dist_a = 0.
+        float dist_b = 0.
+
+        float max = array.max(array.slice(Y, 0, 5))
+        float min = array.min(array.slice(Y, 0, 5))
+        float val = array.get(Y, 0) < array.get(Y, 1) ? min : max
+
+        int dist1 = array.get(X, 0) - array.get(X, 2)
+        int dist2 = array.get(X, 2) - array.get(X, 4)
+
+        float a_y = array.get(Y, 2)
+        float b_y = array.get(Y, 1)
+        float c_y = array.get(Y, 1)
+        float d_y = array.get(Y, 0)
+
+        float y1 = na
+        for i = 0 to dist1
+            float k = i / dist1
+            float y2 = a_y * math.pow(1 - k, 3) + 3 * b_y * math.pow(1 - k, 2) * k + 3 * c_y * (1 - k) * math.pow(k, 2) + d_y * math.pow(k, 3)
+            dist_a += math.abs(y2 - val)
+            y1 := y2
+
+        a_y := array.get(Y, 4)
+        b_y := array.get(Y, 3)
+        c_y := array.get(Y, 3)
+        d_y := array.get(Y, 2)
+
+        y1 := na
+        for i = 0 to dist2
+            float k = i / dist2
+            float y2 = a_y * math.pow(1 - k, 3) + 3 * b_y * math.pow(1 - k, 2) * k + 3 * c_y * (1 - k) * math.pow(k, 2) + d_y * math.pow(k, 3)
+            dist_b += math.abs(y2 - val)
+            y1 := y2
+
+        float a_dist = dist_a / dist1
+        float b_dist = dist_b / dist2
+        score := (1 - math.abs(a_dist / (a_dist + b_dist) - 0.5) * 2) * 100
+
+        table.cell(tb, 0, 0, "Frog Jump Score", text_color=color.gray)
+        table.cell(tb, 0, 1, str.tostring(score, '#.##') + "%", text_color=color.gray)
+
+    if from_start
+        array.shift(Y)
+        array.shift(X)
+
+// === Alerts (Only on valid, alternating signals)
+alertcondition(validFrog, title="Frog Appears", message="🐸 Potential bottom detected (trend-confirmed & alternating)")
+alertcondition(validFox, title="Fox Appears", message="🦊 Potential top detected (trend-confirmed & alternating)")
