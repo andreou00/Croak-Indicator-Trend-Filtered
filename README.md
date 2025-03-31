@@ -63,11 +63,6 @@ The current version removes arcs and backgrounds to reduce noise and adds smarte
 
 ---
 
-## 📄 License
-This project is licensed under the [MIT License](LICENSE).
-
----
-
 ## ⚠️ Disclaimer
 This script is provided for **educational and informational purposes only**. It is a **repainting indicator** and is **not meant for real-time trade execution**. Always perform your own research and risk management.
 
